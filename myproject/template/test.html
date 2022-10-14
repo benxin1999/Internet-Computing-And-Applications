@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<form action="\account\login" method="POST">
+    <label for="username"> username: </label>
+    <input name="username" type="text" value={{ username }}>
+    <br>
+    <label for="password"> password: </label>
+    <input name="password" type="password"/>
+    <br>
+    <input type="submit">
+    <h1> {{ message }}</h1>
+    <b>{{ data.token }}</b>
+</form>
+<form action="\account\modify\password"
+</body>
+</html>
