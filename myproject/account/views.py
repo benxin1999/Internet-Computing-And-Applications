@@ -19,14 +19,18 @@ def calc_md5(password):
     md5_obj.update(password.encode('utf-8'))
     return md5_obj.hexdigest()
 
+def password_is_valid(password):
+    if len(password)>15 or len(password)<5:
+        return False
+    return password.isalnum()
+
+
+
 
 @csrf_exempt
 def signup(request):
     if request.method == 'POST':
         json_param = json.loads(request.body.decode())
-        print(json_param)
-        # username = request.POST.get('username', None)
-        # password = request.POST.get('password', None)
         username = json_param.get('username',None)
         password = json_param['password']
         try:
@@ -37,12 +41,22 @@ def signup(request):
             try:
                 if len(username) < 8 or len(username) > 15 or password == None:
                     raise NameError
-                models.User.objects.create(username=username, password=calc_md5(password))
-                code = 200
-                msg = 'Account created successfully!'
+                else:
+                    try:
+                        if password_is_valid(password):
+                            slogon = 'To learn and to apply, for the benefit of mankind.'
+                            models.User.objects.create(username=username, password=calc_md5(password), slogon=slogon)
+                            code = 200
+                            msg = 'Account created successfully!'
+                        else:
+                            raise ValueError
+                    except:
+                        code = 400
+                        msg = 'The length of the password should be between 5 and 15. Only uppercase letters, lowercase letters and numbers are accepted.'
+
             except:
                 code = 400
-                msg = 'The username length should be more than 8 but less than 15 characters and the length of password should be more than 6 characters.'
+                msg = 'The username length should be more than 8 but less than 15 characters and password cannot be null. '
         un = username
 
         res = {'code': code, 'message': msg, 'username': un, 'data': None}
@@ -114,9 +128,6 @@ def modify_password(request):
 
     if request.method == 'POST':
         json_param = json.loads(request.body.decode())
-        # oldPass = request.POST.get('oldPassword', None)
-        # newPass = request.POST.get('newPassword', None)
-        # comfirmPass = request.POST.get('confirmPassword', None)
         oldPass = json_param['oldPassword']
         newPass = json_param['newPassword']
         comfirmPass = json_param['confirmPassword']
@@ -186,7 +197,8 @@ def get_userinfo(request):
     if request.method == 'GET':
         try:
             user = models.User.objects.get(username=cur_username)
-            res = {'id': user.id, 'slogon': user.slogon, 'avatar': user.avatar, 'username': cur_username, 'code': 200}
+            msg = 'Successful request!'
+            res = {'code': 200,'msg':msg,'data':{'id': user.id, 'slogon': user.slogon, 'avatar': user.avatar, 'username': cur_username},}
         except:
             msg = "Cant get access to the information"
             res = {'msg': msg, 'code': 400}
