@@ -2,11 +2,13 @@ from django.shortcuts import render
 from django.http import HttpResponse, HttpResponseRedirect
 from django.views.decorators.csrf import csrf_exempt
 from account import models
-import hashlib
 import json
 import jwt
 import time
-
+import os
+import sys
+sys.path.append(os.path.dirname(__file__).upper())
+from Tools import authenticate
 
 # Create your views here.
 
@@ -14,15 +16,15 @@ def index(request):
     return render(request, 'test.html')
 
 
-def calc_md5(password):
-    md5_obj = hashlib.md5()
-    md5_obj.update(password.encode('utf-8'))
-    return md5_obj.hexdigest()
+# def calc_md5(password):
+#     md5_obj = hashlib.md5()
+#     md5_obj.update(password.encode('utf-8'))
+#     return md5_obj.hexdigest()
 
-def password_is_valid(password):
-    if len(password)>15 or len(password)<5:
-        return False
-    return password.isalnum()
+# def password_is_valid(password):
+#     if len(password)>15 or len(password)<5:
+#         return False
+#     return password.isalnum()
 
 
 
@@ -43,9 +45,9 @@ def signup(request):
                     raise NameError
                 else:
                     try:
-                        if password_is_valid(password):
+                        if authenticate.password_is_valid(password):
                             slogon = 'To learn and to apply, for the benefit of mankind.'
-                            models.User.objects.create(username=username, password=calc_md5(password), slogon=slogon)
+                            models.User.objects.create(username=username, password=authenticate.calc_md5(password), slogon=slogon)
                             code = 200
                             msg = 'Account created successfully!'
                         else:
@@ -66,29 +68,29 @@ def signup(request):
 
 # JWT token generation & verification
 
-def get_jwt_token(username):
-    payload = {
-        'exp': int(time.time()) + 60 * 180,
-        'iat': int(time.time()),
-        'data': {'username': username}
-    }
-    encoded_jwt = jwt.encode(payload, 'secret', algorithm='HS256')
-    return encoded_jwt
+# def get_jwt_token(username):
+#     payload = {
+#         'exp': int(time.time()) + 60 * 180,
+#         'iat': int(time.time()),
+#         'data': {'username': username}
+#     }
+#     encoded_jwt = jwt.encode(payload, 'secret', algorithm='HS256')
+#     return encoded_jwt
 
 
-def verify_jwt_token(token):
-    try:
-        _payload = jwt.decode(token, 'secret', algorithms='HS256')
-    except jwt.PyJWTError:
-        print('Not match!')
-        return {'res': False}
-    else:
-        exp = int(_payload.pop('exp'))
-
-        if time.time() > exp:
-            print('Out of time!')
-            return {'res': False}
-        return {'res': True, 'user': _payload['data']['username']}
+# def verify_jwt_token(token):
+#     try:
+#         _payload = jwt.decode(token, 'secret', algorithms='HS256')
+#     except jwt.PyJWTError:
+#         print('Not match!')
+#         return {'res': False}
+#     else:
+#         exp = int(_payload.pop('exp'))
+#
+#         if time.time() > exp:
+#             print('Out of time!')
+#             return {'res': False}
+#         return {'res': True, 'user': _payload['data']['username']}
 
 
 @csrf_exempt
@@ -99,8 +101,8 @@ def login(request):
         password = json_param['password']
         try:
             user = models.User.objects.get(username=username)
-            if user.password == calc_md5(password):
-                token = get_jwt_token(username)
+            if user.password == authenticate.calc_md5(password):
+                token = authenticate.get_jwt_token(username)
                 code = 200
                 message = 'Log in successfully!'
             else:
@@ -120,11 +122,9 @@ def login(request):
 @csrf_exempt
 def modify_password(request):
     token = request.META.get('HTTP_AUTHORIZATION')
-    auth = verify_jwt_token(token)
-    if not auth['res']:
-        msg = 'No permission, please log in.'
-        return render(request, 'test.html', locals())
-    cur_username = auth['user']
+    if not authenticate.authenticate(token):
+        return HttpResponse('No Permission, please log in!')
+    cur_username = authenticate.authenticate(token)
 
     if request.method == 'POST':
         json_param = json.loads(request.body.decode())
@@ -133,11 +133,11 @@ def modify_password(request):
         comfirmPass = json_param['confirmPassword']
         user = models.User.objects.get(username=cur_username)
         try:
-            if user.password == calc_md5(oldPass):
+            if user.password == authenticate.calc_md5(oldPass):
                 try:
                     print(newPass, comfirmPass)
                     if newPass == comfirmPass:
-                        user.password = calc_md5(newPass)
+                        user.password = authenticate.calc_md5(newPass)
                         user.save()
                         msg = 'Successfully modified!'
                         code = 200
@@ -159,11 +159,9 @@ def modify_password(request):
 @csrf_exempt
 def modify_userInfo(request):
     token = request.META.get('HTTP_AUTHORIZATION')
-    auth = verify_jwt_token(token)
-    if not auth['res']:
-        msg = 'No permission, please log in.'
-        return render(request, 'test.html', locals())
-    cur_username = auth['user']
+    if not authenticate.authenticate(token):
+        return HttpResponse('No Permission, please log in!')
+    cur_username = authenticate.authenticate(token)
 
     if request.method == 'POST':
         json_param = json.loads(request.body.decode("utf-8"))
@@ -188,18 +186,17 @@ def modify_userInfo(request):
 
 def get_userinfo(request):
     token = request.META.get('HTTP_AUTHORIZATION')
-    auth = verify_jwt_token(token)
-    if not auth['res']:
-        msg = 'No permission, please log in.'
-        res = {'message': msg, 'code': 403}
-        return HttpResponse(json.dumps(res), status=res['code'])
-    cur_username = auth['user']
+    if not authenticate.authenticate(token):
+        return HttpResponse('No Permission, please log in!')
+    cur_username = authenticate.authenticate(token)
+
     if request.method == 'GET':
         try:
             user = models.User.objects.get(username=cur_username)
             msg = 'Successful request!'
             res = {'code': 200,'msg':msg,'data':{'id': user.id, 'slogon': user.slogon, 'avatar': user.avatar, 'username': cur_username},}
-        except:
+        except Exception as e:
+            print(e)
             msg = "Cant get access to the information"
             res = {'msg': msg, 'code': 400}
 
